@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>AR - Objeto 3D en Posición Fija</title>
+    <title>AR - Montreal</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <!-- 🔧 IMPORTANTE: Política de permisos para WebXR -->
+    <meta http-equiv="Permissions-Policy" content="xr-spatial-tracking=(self)">
     <style>
         body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
         #info {
@@ -48,15 +50,33 @@
             pointer-events: none;
             z-index: 10;
         }
+        #error-msg {
+            position: absolute;
+            top: 50%;
+            left: 20px;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(200,0,0,0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 30;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div id="info">
-        🎯 Objeto 3D en posición fija<br>
+        🎯 Objeto 3D - Montreal<br>
         Mueve tu dispositivo para verlo desde diferentes ángulos
     </div>
     <div id="loading">
         ⏳ Cargando modelo 3D...
+    </div>
+    <div id="error-msg">
+        ❌ WebXR no está disponible en este navegador o dispositivo.<br>
+        Asegurate de usar Chrome, Edge o Safari (iOS 15+) con HTTPS.
     </div>
     <div id="ar-button-container"></div>
 
@@ -77,17 +97,26 @@
         let camera, scene, renderer;
         let mainObject = null;
         let loadingDiv = document.getElementById('loading');
+        let errorDiv = document.getElementById('error-msg');
 
-        function init() {
+        async function init() {
+            // 🔧 Verificar si el navegador soporta WebXR
+            if (!navigator.xr) {
+                errorDiv.style.display = 'block';
+                loadingDiv.style.display = 'none';
+                console.error('WebXR no soportado en este navegador');
+                return;
+            }
+
             // Configurar escena
             scene = new THREE.Scene();
-            scene.background = null; // Transparente para ver la cámara real
+            scene.background = null;
 
             // Configurar cámara
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 40);
             camera.position.set(0, 1.5, 0);
 
-            // Configurar renderizador con soporte WebXR
+            // Configurar renderizador
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -110,61 +139,39 @@
             backLight.position.set(0, 1, -1);
             scene.add(backLight);
 
-            // 🔴 IMPORTANTE: Cambia "tu-objeto.glb" por el NOMBRE REAL de tu archivo
-            const nombreDeTuArchivo = "glossy.glb";  // <--- ¡CAMBIA ESTO!
-            
-            // Cargar tu modelo 3D
+            // Cargar el modelo (usando glossy.glb de tu repo)
             const loader = new GLTFLoader();
             loader.load(
-                nombreDeTuArchivo,
+                'glossy.glb',
                 function(gltf) {
-                    // Éxito: el modelo se cargó correctamente
                     mainObject = gltf.scene;
-                    
-                    // 📍 POSICIÓN: ajusta estos valores
-                    // x: izquierda/derecha | y: arriba/abajo | z: distancia (negativo = frente)
-                    mainObject.position.set(0, -0.2, -0.8);
-                    
-                    // 📏 ESCALA: ajusta si tu modelo es muy grande o pequeño
+                    // 🔧 Posición: frente al usuario, altura media
+                    mainObject.position.set(0, -0.3, -0.8);
                     mainObject.scale.set(0.5, 0.5, 0.5);
-                    
-                    // 🌀 ROTACIÓN inicial si la necesitas (en radianes)
-                    // mainObject.rotation.set(0, 0, 0);
-                    
                     scene.add(mainObject);
                     loadingDiv.style.display = 'none';
                     console.log('✅ Modelo cargado correctamente');
                 },
                 function(xhr) {
-                    // Progreso de carga
                     let progress = Math.floor((xhr.loaded / xhr.total) * 100);
-                    loadingDiv.innerHTML = `⏳ Cargando modelo 3D... ${progress}%`;
+                    loadingDiv.innerHTML = `⏳ Cargando modelo... ${progress}%`;
                 },
                 function(error) {
-                    // Error al cargar
                     console.error('❌ Error cargando el modelo:', error);
-                    loadingDiv.innerHTML = '❌ Error: No se pudo cargar el modelo 3D<br>¿Está el archivo en la misma carpeta?';
+                    loadingDiv.innerHTML = '❌ Error cargando el modelo 3D';
                     loadingDiv.style.backgroundColor = 'rgba(200,0,0,0.8)';
-                    
-                    // Opcional: mostrar un objeto de respaldo (un cubo)
-                    const fallbackGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-                    const fallbackMaterial = new THREE.MeshStandardMaterial({ color: 0xff3366 });
-                    mainObject = new THREE.Mesh(fallbackGeometry, fallbackMaterial);
-                    mainObject.position.set(0, -0.2, -0.8);
-                    scene.add(mainObject);
                 }
             );
 
-            // Botón para iniciar AR
+            // 🔧 CONFIGURACIÓN CORREGIDA PARA WEBXR
+            // Usamos 'local-floor' como espacio de referencia y agregamos los features necesarios
             const arButton = ARButton.createButton(renderer, {
-                requiredFeatures: ['local']
+                requiredFeatures: ['local-floor'],
+                optionalFeatures: ['bounded-floor']
             });
             document.getElementById('ar-button-container').appendChild(arButton);
 
-            // Manejar redimensionamiento
             window.addEventListener('resize', onWindowResize, false);
-            
-            // Iniciar bucle de renderizado
             renderer.setAnimationLoop(render);
         }
 
@@ -175,12 +182,10 @@
         }
 
         function render() {
-            // Si el objeto existe, puedes añadir animaciones
             if (mainObject) {
-                // Rotación suave en Y (opcional, coméntala si no la quieres)
+                // Animación suave opcional
                 // mainObject.rotation.y += 0.005;
             }
-            
             renderer.render(scene, camera);
         }
 
