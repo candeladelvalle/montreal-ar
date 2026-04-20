@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <title>AR - Objeto 3D en Posición Fija</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 10;
+            font-size: 14px;
+        }
+        #ar-button-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 20;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        button:active { transform: scale(0.98); }
+        #loading {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #ffaa00;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        🎯 Objeto 3D en posición fija<br>
+        Mueve tu dispositivo para verlo desde diferentes ángulos
+    </div>
+    <div id="loading">
+        ⏳ Cargando modelo 3D...
+    </div>
+    <div id="ar-button-container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.133.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.133.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        let camera, scene, renderer;
+        let mainObject = null;
+        let loadingDiv = document.getElementById('loading');
+
+        function init() {
+            // Configurar escena
+            scene = new THREE.Scene();
+            scene.background = null; // Transparente para ver la cámara real
+
+            // Configurar cámara
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 40);
+            camera.position.set(0, 1.5, 0);
+
+            // Configurar renderizador con soporte WebXR
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Iluminación
+            const ambientLight = new THREE.AmbientLight(0x404060);
+            scene.add(ambientLight);
+            
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1);
+            mainLight.position.set(1, 2, 1);
+            scene.add(mainLight);
+            
+            const fillLight = new THREE.PointLight(0x4466cc, 0.3);
+            fillLight.position.set(0, -1, 0);
+            scene.add(fillLight);
+            
+            const backLight = new THREE.PointLight(0xffaa66, 0.4);
+            backLight.position.set(0, 1, -1);
+            scene.add(backLight);
+
+            // 🔴 IMPORTANTE: Cambia "tu-objeto.glb" por el NOMBRE REAL de tu archivo
+            const nombreDeTuArchivo = "tu-objeto.glb";  // <--- ¡CAMBIA ESTO!
+            
+            // Cargar tu modelo 3D
+            const loader = new GLTFLoader();
+            loader.load(
+                nombreDeTuArchivo,
+                function(gltf) {
+                    // Éxito: el modelo se cargó correctamente
+                    mainObject = gltf.scene;
+                    
+                    // 📍 POSICIÓN: ajusta estos valores
+                    // x: izquierda/derecha | y: arriba/abajo | z: distancia (negativo = frente)
+                    mainObject.position.set(0, -0.2, -0.8);
+                    
+                    // 📏 ESCALA: ajusta si tu modelo es muy grande o pequeño
+                    mainObject.scale.set(0.5, 0.5, 0.5);
+                    
+                    // 🌀 ROTACIÓN inicial si la necesitas (en radianes)
+                    // mainObject.rotation.set(0, 0, 0);
+                    
+                    scene.add(mainObject);
+                    loadingDiv.style.display = 'none';
+                    console.log('✅ Modelo cargado correctamente');
+                },
+                function(xhr) {
+                    // Progreso de carga
+                    let progress = Math.floor((xhr.loaded / xhr.total) * 100);
+                    loadingDiv.innerHTML = `⏳ Cargando modelo 3D... ${progress}%`;
+                },
+                function(error) {
+                    // Error al cargar
+                    console.error('❌ Error cargando el modelo:', error);
+                    loadingDiv.innerHTML = '❌ Error: No se pudo cargar el modelo 3D<br>¿Está el archivo en la misma carpeta?';
+                    loadingDiv.style.backgroundColor = 'rgba(200,0,0,0.8)';
+                    
+                    // Opcional: mostrar un objeto de respaldo (un cubo)
+                    const fallbackGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+                    const fallbackMaterial = new THREE.MeshStandardMaterial({ color: 0xff3366 });
+                    mainObject = new THREE.Mesh(fallbackGeometry, fallbackMaterial);
+                    mainObject.position.set(0, -0.2, -0.8);
+                    scene.add(mainObject);
+                }
+            );
+
+            // Botón para iniciar AR
+            const arButton = ARButton.createButton(renderer, {
+                requiredFeatures: ['local']
+            });
+            document.getElementById('ar-button-container').appendChild(arButton);
+
+            // Manejar redimensionamiento
+            window.addEventListener('resize', onWindowResize, false);
+            
+            // Iniciar bucle de renderizado
+            renderer.setAnimationLoop(render);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function render() {
+            // Si el objeto existe, puedes añadir animaciones
+            if (mainObject) {
+                // Rotación suave en Y (opcional, coméntala si no la quieres)
+                // mainObject.rotation.y += 0.005;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
