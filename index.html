@@ -1,195 +1,382 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <title>AR - Montreal</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <!-- 🔧 IMPORTANTE: Política de permisos para WebXR -->
-    <meta http-equiv="Permissions-Policy" content="xr-spatial-tracking=(self)">
-    <style>
-        body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
-        #info {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            pointer-events: none;
-            z-index: 10;
-            font-size: 14px;
-        }
-        #ar-button-container {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            z-index: 20;
-        }
-        button {
-            background: #2196F3;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 30px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-        button:active { transform: scale(0.98); }
-        #loading {
-            position: absolute;
-            bottom: 100px;
-            left: 20px;
-            background: rgba(0,0,0,0.7);
-            color: #ffaa00;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            pointer-events: none;
-            z-index: 10;
-        }
-        #error-msg {
-            position: absolute;
-            top: 50%;
-            left: 20px;
-            right: 20px;
-            transform: translateY(-50%);
-            background: rgba(200,0,0,0.9);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            z-index: 30;
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prueba AR - 1 Modelo</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { 
+      font-family: Arial; 
+      background: #000;
+      overflow: hidden;
+    }
+    #canvas { 
+      display: block; 
+      width: 100vw; 
+      height: 100vh;
+    }
+    #info {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 15px 30px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 14px;
+    }
+    #arButton {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 12px 24px;
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 100;
+      font-weight: bold;
+    }
+    #arButton:hover {
+      background: #0052a3;
+    }
+    #arButton.active {
+      background: #00aa00;
+    }
+    #loader {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      padding: 30px;
+      border-radius: 8px;
+      text-align: center;
+      color: white;
+    }
+    .loading-spinner {
+      border: 4px solid #333;
+      border-top: 4px solid #0066cc;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    #error {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(255,0,0,0.8);
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      max-width: 300px;
+      display: none;
+      z-index: 1000;
+    }
+    #controls {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 15px 30px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 13px;
+      display: none;
+    }
+  </style>
 </head>
 <body>
-    <div id="info">
-        🎯 Objeto 3D - Montreal<br>
-        Mueve tu dispositivo para verlo desde diferentes ángulos
-    </div>
-    <div id="loading">
-        ⏳ Cargando modelo 3D...
-    </div>
-    <div id="error-msg">
-        ❌ WebXR no está disponible en este navegador o dispositivo.<br>
-        Asegurate de usar Chrome, Edge o Safari (iOS 15+) con HTTPS.
-    </div>
-    <div id="ar-button-container"></div>
+  <div id="canvas"></div>
+  <button id="arButton">Iniciar AR</button>
+  
+  <div id="info">👆 Toca para colocar el objeto</div>
+  
+  <div id="controls">
+    <div>👆 1 dedo: Rota</div>
+    <div>✌️ 2 dedos: Escala</div>
+  </div>
+  
+  <div id="loader">
+    <div class="loading-spinner"></div>
+    <p>Cargando modelo...</p>
+  </div>
+  
+  <div id="error"></div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.133.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.133.0/examples/jsm/"
-            }
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@r128/examples/js/loaders/GLTFLoader.js"></script>
+
+  <script>
+    // ===== CONFIGURACIÓN SIMPLE =====
+    const MODELO_URL = './modelo.glb'; // Asegúrate de que el archivo se llama "modelo.glb"
+
+    let scene, camera, renderer;
+    let modelo = null;
+    let arSession = null;
+    let modeloColocado = false;
+
+    const arButton = document.getElementById('arButton');
+    const info = document.getElementById('info');
+    const controls = document.getElementById('controls');
+    const loader = document.getElementById('loader');
+    const errorDiv = document.getElementById('error');
+
+    // ===== VARIABLES PARA GESTOS =====
+    let touchStart = { x: 0, y: 0, distance: 0 };
+    let isRotating = false;
+
+    // ===== INICIALIZAR THREE.JS =====
+    function inicializar() {
+      const container = document.getElementById('canvas');
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      
+      renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: true,
+        canvas: container,
+        xrCompatible: true 
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      renderer.xr.setReferenceSpaceType('local');
+
+      // Luces
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      directionalLight.position.set(5, 10, 5);
+      scene.add(directionalLight);
+
+      // Cargar modelo
+      const gltfLoader = new THREE.GLTFLoader();
+      gltfLoader.load(MODELO_URL, (gltf) => {
+        modelo = gltf.scene;
+        modelo.scale.set(0.5, 0.5, 0.5);
+        modelo.position.set(0, -0.5, -1);
+        
+        modelo.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        loader.style.display = 'none';
+        console.log('✅ Modelo cargado correctamente');
+      }, 
+      (progress) => {
+        // Mostrar progreso
+        const percent = Math.round((progress.loaded / progress.total) * 100);
+        console.log(`Cargando: ${percent}%`);
+      },
+      (error) => {
+        mostrarError('❌ Error: ' + error.message);
+        console.error('Error completo:', error);
+        loader.style.display = 'none';
+      });
+
+      // Verificar soporte AR
+      if (navigator.xr) {
+        navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+          if (supported) {
+            arButton.style.display = 'block';
+            arButton.addEventListener('click', iniciarAR);
+            console.log('✅ WebXR soportado');
+          } else {
+            mostrarError('❌ AR no soportado en este navegador');
+            console.warn('WebXR no soportado');
+          }
+        }).catch(err => {
+          mostrarError('❌ Error verificando AR: ' + err.message);
+          console.error(err);
+        });
+      } else {
+        mostrarError('❌ WebXR no disponible');
+        console.error('WebXR no está disponible');
+      }
+
+      // Render loop
+      renderer.setAnimationLoop((time, frame) => {
+        if (modelo && !modeloColocado) {
+          modelo.rotation.y += 0.005;
         }
-    </script>
+        renderer.render(scene, camera);
+      });
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { ARButton } from 'three/addons/webxr/ARButton.js';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      // Listeners para gestos
+      document.addEventListener('touchstart', onTouchStart, false);
+      document.addEventListener('touchmove', onTouchMove, false);
+      document.addEventListener('touchend', onTouchEnd, false);
 
-        let camera, scene, renderer;
-        let mainObject = null;
-        let loadingDiv = document.getElementById('loading');
-        let errorDiv = document.getElementById('error-msg');
+      console.log('✅ Three.js inicializado');
+    }
 
-        async function init() {
-            // 🔧 Verificar si el navegador soporta WebXR
-            if (!navigator.xr) {
-                errorDiv.style.display = 'block';
-                loadingDiv.style.display = 'none';
-                console.error('WebXR no soportado en este navegador');
-                return;
-            }
+    // ===== INICIAR SESIÓN AR =====
+    async function iniciarAR() {
+      try {
+        console.log('📍 Iniciando sesión AR...');
+        
+        const session = await navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['hit-test'],
+          optionalFeatures: ['dom-overlay', 'dom-overlay-for-handheld-ar'],
+          domOverlay: { root: document.body }
+        });
 
-            // Configurar escena
-            scene = new THREE.Scene();
-            scene.background = null;
+        arSession = session;
+        arButton.classList.add('active');
+        arButton.textContent = '❌ Salir AR';
+        info.textContent = '👆 Toca el suelo para colocar el objeto';
+        info.style.display = 'block';
+        controls.style.display = 'block';
 
-            // Configurar cámara
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 40);
-            camera.position.set(0, 1.5, 0);
+        console.log('✅ Sesión AR iniciada');
 
-            // Configurar renderizador
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
+        // Event listener para clicks (hit-test)
+        session.addEventListener('select', onARSelect);
 
-            // Iluminación
-            const ambientLight = new THREE.AmbientLight(0x404060);
-            scene.add(ambientLight);
+        // Cambiar botón a salir
+        arButton.onclick = salirAR;
+
+      } catch (err) {
+        mostrarError('❌ Error AR: ' + err.message);
+        console.error('Error completo:', err);
+      }
+    }
+
+    // ===== HIT-TEST =====
+    async function onARSelect(event) {
+      const session = event.session;
+      const frame = event.frame;
+      const inputSource = event.inputSource;
+
+      try {
+        const hitTestResults = await frame.session.requestHitTestSource({ 
+          space: inputSource.targetRaySpace 
+        });
+
+        if (hitTestResults.length > 0 && modelo && !modeloColocado) {
+          const hit = hitTestResults[0];
+          const pose = hit.getPose(frame.session.inputSpace);
+
+          if (pose) {
+            modelo.position.setFromMatrixPosition(pose.transform.matrix);
+            scene.add(modelo);
+            modeloColocado = true;
             
-            const mainLight = new THREE.DirectionalLight(0xffffff, 1);
-            mainLight.position.set(1, 2, 1);
-            scene.add(mainLight);
-            
-            const fillLight = new THREE.PointLight(0x4466cc, 0.3);
-            fillLight.position.set(0, -1, 0);
-            scene.add(fillLight);
-            
-            const backLight = new THREE.PointLight(0xffaa66, 0.4);
-            backLight.position.set(0, 1, -1);
-            scene.add(backLight);
+            info.textContent = '✅ Objeto colocado';
+            console.log('✅ Objeto colocado en AR');
+          }
+        }
+      } catch (err) {
+        console.error('Hit test error:', err);
+      }
+    }
 
-            // Cargar el modelo (usando glossy.glb de tu repo)
-            const loader = new GLTFLoader();
-            loader.load(
-                'glossy.glb',
-                function(gltf) {
-                    mainObject = gltf.scene;
-                    // 🔧 Posición: frente al usuario, altura media
-                    mainObject.position.set(0, -0.3, -0.8);
-                    mainObject.scale.set(0.5, 0.5, 0.5);
-                    scene.add(mainObject);
-                    loadingDiv.style.display = 'none';
-                    console.log('✅ Modelo cargado correctamente');
-                },
-                function(xhr) {
-                    let progress = Math.floor((xhr.loaded / xhr.total) * 100);
-                    loadingDiv.innerHTML = `⏳ Cargando modelo... ${progress}%`;
-                },
-                function(error) {
-                    console.error('❌ Error cargando el modelo:', error);
-                    loadingDiv.innerHTML = '❌ Error cargando el modelo 3D';
-                    loadingDiv.style.backgroundColor = 'rgba(200,0,0,0.8)';
-                }
-            );
+    // ===== GESTOS TÁCTILES =====
+    function onTouchStart(event) {
+      if (event.touches.length === 1) {
+        touchStart = {
+          x: event.touches[0].clientX,
+          y: event.touches[0].clientY,
+          distance: 0
+        };
+        isRotating = true;
+      } else if (event.touches.length === 2) {
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        touchStart.distance = Math.sqrt(dx * dx + dy * dy);
+        isRotating = false;
+      }
+    }
 
-            // 🔧 CONFIGURACIÓN CORREGIDA PARA WEBXR
-            // Usamos 'local-floor' como espacio de referencia y agregamos los features necesarios
-            const arButton = ARButton.createButton(renderer, {
-                requiredFeatures: ['local-floor'],
-                optionalFeatures: ['bounded-floor']
-            });
-            document.getElementById('ar-button-container').appendChild(arButton);
+    function onTouchMove(event) {
+      if (!modelo || !modeloColocado) return;
 
-            window.addEventListener('resize', onWindowResize, false);
-            renderer.setAnimationLoop(render);
+      if (event.touches.length === 1 && isRotating) {
+        // Rotación con 1 dedo
+        const deltaX = event.touches[0].clientX - touchStart.x;
+        const deltaY = event.touches[0].clientY - touchStart.y;
+
+        modelo.rotation.y += deltaX * 0.01;
+        modelo.rotation.x += deltaY * 0.01;
+
+        touchStart.x = event.touches[0].clientX;
+        touchStart.y = event.touches[0].clientY;
+
+      } else if (event.touches.length === 2) {
+        // Escalado con 2 dedos (pellizco)
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        const newDistance = Math.sqrt(dx * dx + dy * dy);
+
+        if (touchStart.distance > 0) {
+          const scale = newDistance / touchStart.distance;
+          modelo.scale.multiplyScalar(scale);
+          
+          // Limitar escala
+          const currentScale = modelo.scale.x;
+          if (currentScale < 0.2) modelo.scale.set(0.2, 0.2, 0.2);
+          if (currentScale > 3) modelo.scale.set(3, 3, 3);
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        touchStart.distance = newDistance;
+      }
+    }
 
-        function render() {
-            if (mainObject) {
-                // Animación suave opcional
-                // mainObject.rotation.y += 0.005;
-            }
-            renderer.render(scene, camera);
-        }
+    function onTouchEnd(event) {
+      isRotating = false;
+      touchStart.distance = 0;
+    }
 
-        init();
-    </script>
+    // ===== SALIR DE AR =====
+    function salirAR() {
+      if (arSession) {
+        arSession.end();
+        arSession = null;
+        modeloColocado = false;
+        arButton.classList.remove('active');
+        arButton.textContent = 'Iniciar AR';
+        arButton.onclick = iniciarAR;
+        info.textContent = '👆 Toca para colocar el objeto';
+        controls.style.display = 'none';
+        console.log('✅ AR cerrado');
+      }
+    }
+
+    // ===== MOSTRAR ERRORES =====
+    function mostrarError(msg) {
+      errorDiv.textContent = msg;
+      errorDiv.style.display = 'block';
+      console.error(msg);
+    }
+
+    // ===== RESPONSIVE =====
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Inicializar cuando esté listo
+    console.log('🚀 Cargando AR Viewer...');
+    document.addEventListener('DOMContentLoaded', inicializar);
+  </script>
 </body>
 </html>
